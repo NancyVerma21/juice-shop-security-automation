@@ -1,0 +1,81 @@
+name: Juice Shop Security Automation
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  automated-tests:
+    name: UI, API and Security Tests
+    runs-on: ubuntu-latest
+
+    services:
+      juice-shop:
+        image: bkimminich/juice-shop:v20.2.0
+        ports:
+          - 3000:3000
+
+    env:
+      BASE_URL: http://127.0.0.1:3000
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Install Playwright Chromium
+        run: python -m playwright install --with-deps chromium
+
+      - name: Wait for Juice Shop
+        run: |
+          python - <<'PY'
+          import time
+          import requests
+
+          url = "http://127.0.0.1:3000"
+
+          for attempt in range(60):
+              try:
+                  response = requests.get(url, timeout=3)
+                  if response.status_code == 200:
+                      print("Juice Shop is ready.")
+                      break
+              except requests.RequestException:
+                  pass
+
+              time.sleep(2)
+          else:
+              raise SystemExit("Juice Shop did not start within 120 seconds.")
+          PY
+
+      - name: Run automated tests and generate Allure results
+        run: pytest --alluredir=allure-results
+
+      - name: Upload test reports and failure evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: juice-shop-test-artifacts
+          path: |
+            allure-results/
+            test-results/
+            screenshots/
+            traces/
+          if-no-files-found: warn
+          retention-days: 14
