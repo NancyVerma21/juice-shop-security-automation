@@ -9,3 +9,5 @@ screenshots/*
 traces/*
 test-results/*
 allure-results/*
+
+allure-report/
